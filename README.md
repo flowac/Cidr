@@ -13,4 +13,4 @@ Work in progress
 Work in progress
 
 ## Background
-Traditional version control systems such as Git and SVN are too heavyweight. Furthurmore, they do not support TempleOS' RedSea file format. As a result, the TempleOS repo need to be converted to ASCII prior to uploading, which strips sprites and some other data. If that repo is downloaded as-is, then the demos and games will not work due to the stripped sprites and such.
+Traditional version control systems such as Git and SVN are too heavyweight. Furthermore, they do not support TempleOS's RedSea filesystem. As a result, the TempleOS repo needs to be converted to ASCII prior to uploading, which strips sprites and some other data. If that repo is downloaded as-is, then the demos and games will not work due to the stripped sprites and such.
