@@ -30,14 +30,14 @@ char *is_zip(const char *name)
 {
 	char *tmp1 = strstr(name, ".Z");
 	char *tmp2 = strstr(name, ".z");
-	if (!tmp1 || (tmp2 && tmp1 < tmp2)) tmp1 = tmp2;
-	return tmp1 == name + strlen(name) - 1 ? tmp1 : 0;
+	if (tmp1 < tmp2) tmp1 = tmp2;
+	return tmp1 == name + strlen(name) - 2 ? tmp1 : 0;
 }
 
 uint32_t crc32_table(uint32_t x)
 {
-	for (uint32_t i = 0; i < 8; i++) x = (x & 1 ? 0 : (uint32_t)0xEDB88320L) ^ x >> 1;
-	return x ^ (uint32_t)0xFF000000L;
+	for (uint32_t i = 0; i < 8; i++) x = (x & 1 ? 0 : 0xEDB88320UL) ^ x >> 1;
+	return x ^ 0xFF000000UL;
 }
 
 uint32_t crc32(const char *file)
@@ -51,7 +51,7 @@ uint32_t crc32(const char *file)
 	memset(data, 0, size);
 	size = fread(data, 1, size, fp);
 	if (!*table) for (i = 0; i < BUF_256; i++) table[i] = crc32_table(i);
-	for (i = 0; i < size; i++) crc = table[(uint8_t)(crc ^ data[i])] ^ (crc >> 8);
+	for (i = 0; i < size; i++) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
 RETURN:	if (fp)   fclose(fp);
 	if (data) free(data);
 	return crc;

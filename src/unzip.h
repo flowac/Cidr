@@ -233,7 +233,7 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 	out_size = arc->expanded_size;
 	printf("%-45s %d-->%d\r\n", in_name, (uint32_t)in_size, out_size);
 	fclose(io_file);
-	if (arc->compressed_size != in_size && (out_buf = ExpandBuf(arc))) {
+	if (arc->compressed_size == in_size && (out_buf = ExpandBuf(arc))) {
 		for (i = j = 0; i < out_size; i++)
 			if (out_buf[i] == 31)
 				out_buf[j++] = 32;
@@ -244,14 +244,14 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 			fwrite(out_buf, 1, out_size, io_file);
 			fclose(io_file);
 			ret = 1;
-		}
+		}else puts("cant open out");
 		free(out_buf);
-	}
+	}else puts("arc failed");
 	free(arc);
 	return ret;
 }
 
-//Recursively executes the Cvt command
+//Recursively executes the Cvt command (out_path must exist)
 uint32_t Cvt_r(const char *in_path, const char *out_path)
 {
 	char in1[BUF_256], out[BUF_256], *tmp;
@@ -267,6 +267,7 @@ uint32_t Cvt_r(const char *in_path, const char *out_path)
 		snprintf(out, BUF_256, "%.200s/%.54s", out_path, in3->d_name);
 		if (tmp = is_zip(out)) *tmp = 0;
 		else mkdir(out, 0755);
+		printf("%s > %s\n", in1, out);
 		ret += Cvt_r(in1, out);
 	}
 	if (in2) closedir(in2);
