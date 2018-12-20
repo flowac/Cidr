@@ -8,14 +8,13 @@
 */
 
 #include <dirent.h>
-//#include <math.h>
-//#include <memory.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include "define.h"
 
 #pragma pack(1)
 extern uint32_t fsize(FILE *fp);
@@ -253,31 +252,24 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 }
 
 //Recursively executes the Cvt command
-//Args: input path, input prefix, output prefix
-uint16_t Cvt_r(const char *in0, const char *in_pfx, const char *out_pfx)
+uint32_t Cvt_r(const char *in_path, const char *out_path)
 {
-	char in1[256], out[256], *tmp;
+	char in1[BUF_256], out[BUF_256], *tmp;
 	DIR *in2;
 	struct dirent *in3;
-	uint16_t ret = 0;
+	uint32_t ret = 0;
 
-	if (strlen(in0) > 0) {
-		sprintf(in1, "%s/%s", in_pfx, in0);
-		sprintf(out, "%s/%s", out_pfx, in0);
-	} else {
-		strcpy(in1, in_pfx);
-		strcpy(out, out_pfx);
+	if (is_zip(in_path)) return Cvt(in_path, out_path);
+	for (in2 = opendir(in_path); in2 && (in3 = readdir(in2));) {
+		if (strcmp(in3->d_name,  ".") == 0
+		||  strcmp(in3->d_name, "..") == 0) continue;
+		snprintf(in1, BUF_256, "%.200s/%.54s",  in_path, in3->d_name);
+		snprintf(out, BUF_256, "%.200s/%.54s", out_path, in3->d_name);
+		if (tmp = is_zip(out)) *tmp = 0;
+		else mkdir(out, 0755);
+		ret += Cvt_r(in1, out);
 	}
-	if (tmp = is_zip(out)) {
-		*tmp = 0;
-		ret += Cvt(in1, out);
-	} else if (in2 = opendir(in1))
-		while (in3 = readdir(in2)) {
-			if (strcmp(in3->d_name,  ".") == 0
-			||  strcmp(in3->d_name, "..") == 0) continue;
-			mkdir(out, 0755);
-			ret += Cvt_r(in3->d_name, in1, out);
-		}
+	if (in2) closedir(in2);
 	return ret;
 }
 
