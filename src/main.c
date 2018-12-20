@@ -22,8 +22,9 @@ int help()
 
 int main(int argc, char **argv)
 {
-	FILE *out;
 	char buf[BUF_256];
+	DIR *tmp;
+	FILE *out;
 
 	if (argc < 2) return help();
 	switch (argv[1][0]) {
@@ -35,6 +36,8 @@ int main(int argc, char **argv)
 		if (argc != 3 && argc != 4) return help();
 		if (argc == 4) strncpy(buf, argv[3], BUF_256 - 1);
 		else snprintf(buf, BUF_256, "%.246s_unzipped", argv[2]);
+		if (tmp = opendir(buf)) closedir(tmp);
+		else mkdir(buf, 0755);
 		printf("%u files extracted to %s\n", Cvt_r(argv[2], buf), buf);
 		break;
 	case 't':

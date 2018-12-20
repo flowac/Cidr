@@ -231,7 +231,7 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 	arc = malloc(in_size);
 	fread(arc, 1, in_size, io_file);
 	out_size = arc->expanded_size;
-	printf("%-45s %d-->%d\r\n", in_name, (uint32_t)in_size, out_size);
+//	printf("%-45s %d-->%d\r\n", in_name, (uint32_t)in_size, out_size);
 	fclose(io_file);
 	if (arc->compressed_size == in_size && (out_buf = ExpandBuf(arc))) {
 		for (i = j = 0; i < out_size; i++)
@@ -267,7 +267,6 @@ uint32_t Cvt_r(const char *in_path, const char *out_path)
 		snprintf(out, BUF_256, "%.200s/%.54s", out_path, in3->d_name);
 		if (tmp = is_zip(out)) *tmp = 0;
 		else mkdir(out, 0755);
-		printf("%s > %s\n", in1, out);
 		ret += Cvt_r(in1, out);
 	}
 	if (in2) closedir(in2);
