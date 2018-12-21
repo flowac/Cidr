@@ -234,13 +234,13 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 //	printf("%-45s %d-->%d\r\n", in_name, (uint32_t)in_size, out_size);
 	fclose(io_file);
 	if (arc->compressed_size == in_size && (out_buf = ExpandBuf(arc))) {
-		for (i = j = 0; i < out_size; i++)
+/*		for (i = j = 0; i < out_size; i++)
 			if (out_buf[i] == 31)
 				out_buf[j++] = 32;
 			else if (out_buf[i] != 5)
 				out_buf[j++] = out_buf[i];
 		out_size = j;
-		if (io_file = fopen(out_name, "wb")) {
+*/		if (io_file = fopen(out_name, "wb")) {
 			fwrite(out_buf, 1, out_size, io_file);
 			fclose(io_file);
 			ret = 1;
