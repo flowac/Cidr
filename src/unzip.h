@@ -221,7 +221,7 @@ uint8_t *ExpandBuf(CArcCompress *arc)
 
 uint8_t Cvt(const char *in_name, const char *out_name)
 {
-	uint32_t out_size, i, j, in_size;
+	uint32_t out_size, in_size;
 	CArcCompress *arc;
 	uint8_t *out_buf, ret = 0;
 	FILE *io_file;
@@ -234,7 +234,8 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 //	printf("%-45s %d-->%d\r\n", in_name, (uint32_t)in_size, out_size);
 	fclose(io_file);
 	if (arc->compressed_size == in_size && (out_buf = ExpandBuf(arc))) {
-/*		for (i = j = 0; i < out_size; i++)
+/*		uint32_t i = 0, j = 0;
+		for (; i < out_size; i++)
 			if (out_buf[i] == 31)
 				out_buf[j++] = 32;
 			else if (out_buf[i] != 5)
@@ -244,13 +245,14 @@ uint8_t Cvt(const char *in_name, const char *out_name)
 			fwrite(out_buf, 1, out_size, io_file);
 			fclose(io_file);
 			ret = 1;
-		}else puts("cant open out");
+		}else printf("Can't open [%s]", out_name);
 		free(out_buf);
 	}else puts("arc failed");
 	free(arc);
 	return ret;
 }
 
+//TODO: Single file unzip might be broken
 //Recursively executes the Cvt command (out_path must exist)
 uint32_t Cvt_r(const char *in_path, const char *out_path)
 {
