@@ -7,7 +7,6 @@
 	Description:	File related utilities
 */
 
-//#include <openssl/sha.h>
 #include <openssl/evp.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -193,7 +192,7 @@ RETURN:	if (left3)     remove(left2);
 char diff_bin(const char *left, const char *right) {
 	uint8_t *left_hash = sha512(left), *right_hash = sha512(right);
 	char diff = -1;
-	if (!left || !right) goto RETURN;
+	if (!left_hash || !right_hash) goto RETURN;
 	diff = memcmp(left_hash, right_hash, EVP_MAX_MD_SIZE) == 0 ? 0 : 1;
 
 RETURN:	if (left_hash)  free(left_hash);
