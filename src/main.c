@@ -19,20 +19,26 @@ int help()
 		"e PATH1 [PATH2]         Extract files\n"
 		"t FILE1 FILE2 [RESULTS] Compare 2 text files\n"
 		"h                       Start network host\n"
-		"c                       Start network client\n" C_STD);
+		"c                       Start network client\n"
+		"s FILE                  Test SHA3-512 hashing\n" C_STD);
 }
 
 int main(int argc, char **argv)
 {
-	char buf[BUF_256];
-	DIR *tmp;
-	FILE *out;
+	char     buf[BUF_256];
+	DIR     *tmp;
+	FILE    *out;
+	int      i;
+	uint8_t *pbuf;
 
 	if (argc < 2) return help();
 	switch (argv[1][0]) {
 	case 'b':
 		if (argc != 4) return help();
-		printf("XOR: 0x%X\n", diff_bin(argv[2], argv[3]));
+		i = diff_bin(argv[2], argv[3]);
+		if (i  < 0) puts("Unable to compare.");
+		if (i == 0) puts("The files are the same.");
+		if (i == 1) puts("The files are different.");
 		break;
 	case 'e':
 		if (argc != 3 && argc != 4) return help();
@@ -45,7 +51,7 @@ int main(int argc, char **argv)
 	case 't':
 		if (argc != 4 && argc != 5) return help();
 		if (argc == 4 || !(out = fopen(argv[4], "w"))) out = stdout;
-		printf("Lines changed: %u\n", diff_txt2(argv[2], argv[3], out));
+		diff_txt2(argv[2], argv[3], out);
 		if (out != stdout) fclose(out);
 		break;
 	case 'h':
@@ -53,6 +59,15 @@ int main(int argc, char **argv)
 		break;
 	case 'c':
 		init_sock_client();
+		break;
+	case 's':
+		if (argc != 3) return help();
+		if ((pbuf = sha512(argv[2]))) {
+			for (i = 0; i < EVP_MAX_MD_SIZE; i++)
+				printf("%02X", pbuf[i]);
+			puts("");
+			free(pbuf);
+		}
 		break;
 	default:
 		return help();
