@@ -89,20 +89,15 @@ RETURN: return crc;
 //TODO: code cleanup and rename to diff_txt
 void diff_txt2(const char *left, const char *right, FILE *out)
 {
-	//TODO: rename SIX_B and remove the rest
-	enum TEXT_DIFF {
-		SIX_B = 0x00FFFFFF,
-		MATCH = 0xFFFFFFFE,
-		BLANK = 0xFFFFFFFF
-	};
+	const uint32_t MAX_6B = 0x00FFFFFF;
+	const uint32_t MAX_8B = 0xFFFFFFFF;
 	char  left2[BUF_256],  *left3 = 0;
 	char right2[BUF_256], *right3 = 0;
 	char buf[BUF_1K] = {0}, buf2[BUF_1K] = {0}, **buf3 = 0;
 	void *buf3_head = 0;
 	FILE *left4 = 0, *right4 = 0;
 	uint32_t buf3_len = 0, flag, len, len2;
-	//                    hash array,  array length, offset array
-	uint32_t *left5 = 0, *right5 = 0, left6, right6, *right7 = 0;
+	uint32_t *left5 = 0, *right5 = 0, left6, right6;
 	strcpy(left2, left);
 	strcpy(right2, right);
 
@@ -117,72 +112,57 @@ void diff_txt2(const char *left, const char *right, FILE *out)
 	if (!(left4  = fopen(left2,  "r"))) goto RETURN;
 	if (!(right4 = fopen(right2, "r"))) goto RETURN;
 	//Get checksum of each line
-	//TODO: allocate 1 at a time since malloc time is not that significant
-	for (len = left6 = 0; fgets((char *)buf, BUF_1K, left4); *buf = 0, left6++) {
-		if (len == left6) {
-			len += 100;
-			if (!(left5 = realloc(left5, sizeof(uint32_t) * len))) goto RETURN;
-		}
-		left5[left6] = crc32(buf, strlen((char *)buf));
-	}
-	for (len = right6 = 0; fgets((char *)buf, BUF_1K, right4); *buf = 0, right6++) {
-		if (len == right6) {
-			len += 100;
-			if (!(right5 = realloc(right5, sizeof(uint32_t) * len))) goto RETURN;
-			if (!(right7 = realloc(right7, sizeof(uint32_t) * len))) goto RETURN;
-		}
-		right5[right6] = crc32(buf, strlen((char *)buf));
-		right7[right6] = BLANK;
-	}
+	for (left6 = 0; fgets((char *)buf, BUF_1K, left4); *buf = 0, left6++)
+		if (!(left5 = realloc(left5, sizeof(uint32_t) * (left6 + 1)))) goto RETURN;
+		else left5[left6] = crc32(buf, strlen((char *)buf));
+	for (right6 = 0; fgets((char *)buf, BUF_1K, right4); *buf = 0, right6++)
+		if (!(right5 = realloc(right5, sizeof(uint32_t) * (right6 + 1)))) goto RETURN;
+		else right5[right6] = crc32(buf, strlen((char *)buf));
 	printf("Line count: left = %d, right = %d\n", left6, right6);
 	//Find difference
-	for (flag = len = 0; len < left6; flag = 0, len++) {
-		for (len2 = 0; len2 < right6; len2++) {
-			if (left5[len] == right5[len2]) {
-				flag = MATCH;
+	for (len = 0; len < left6; len++) {
+		flag = left5[len];
+		for (len2 = 0; len2 < right6; len2++)
+			if (flag == right5[len2]) {
+				flag = MAX_8B;
 				right5[len2] = len + 1;
 				break;
 			}
-		}
-		if (flag != MATCH) left5[len] = len;
-	}
-	//TODO: remove this loop and right7 array
-	for (flag = len = 0; len < right6; len++) {
-		if (right5[len] < SIX_B)
-			flag = right5[len];
-		right7[len] = flag;
+		if (flag != MAX_8B) left5[len] = len;
 	}
 	fseek( left4, 0L, SEEK_SET);
 	fseek(right4, 0L, SEEK_SET);
 	for (*buf = len = 0; len < left6; *buf = 0, len++) {
 		fgets((char *)buf, BUF_1K, left4);
-		if (left5[len] < SIX_B)
+		if (left5[len] < MAX_6B)
 			snprintf(buf2, BUF_1K, C_RED "--%05d %.999s" C_STD, left5[len] + 1, buf);
 		else
 			snprintf(buf2, BUF_1K, C_STD "  %05d %.999s" C_STD, len + 1, buf);
 		if (!(buf3 = insert_string(buf3, &buf3_len, buf2, buf3_len))) goto RETURN;
 		else buf3_head = buf3;
 	}
-	for (*buf = len = len2 = 0; len < right6; *buf = 0, len++) {
+	for (*buf = flag = len = len2 = 0; len < right6; *buf = 0, len++) {
 		fgets((char *)buf, BUF_1K, right4);
-		if (right5[len] < SIX_B) continue;
-		snprintf(buf2, BUF_1K, C_GRN "++%05d %.999s" C_STD, right7[len] + 1, buf);
-		if (!(buf3 = insert_string(buf3, &buf3_len, buf2, right7[len] + len2))) goto RETURN;
+		if (right5[len] < MAX_6B) {
+			flag = right5[len];
+			continue;
+		}
+		snprintf(buf2, BUF_1K, C_GRN "++%05d %.999s" C_STD, flag + 1, buf);
+		if (!(buf3 = insert_string(buf3, &buf3_len, buf2, flag + len2))) goto RETURN;
 		else buf3_head = buf3;
 		len2++;
 	}
 	for (len = 0; len < buf3_len; len++) fprintf(out, "%s", buf3[len]);
-	for (len = 0; len < left6 || len < right6; *buf = 0, len++)\
-		printf("%4d: %8X %8X   %8X\n", len+1, len < left6 ? left5[len] : BLANK,
-			len < right6 ? right5[len] : BLANK, len < right6 ? right7[len] : BLANK);
-
+/*	for (len = 0; len < left6 || len < right6; *buf = 0, len++)
+		printf("%4d: %8X %8X\n", len+1, len < left6 ? left5[len] : MAX_8B,
+			len < right6 ? right5[len] : MAX_8B);
+*/
 RETURN:	if (left3)     remove(left2);
 	if (right3)    remove(right2);
 	if (left4)     fclose(left4);
 	if (right4)    fclose(right4);
 	if (left5)     free(left5);
 	if (right5)    free(right5);
-	if (right7)    free(right7);
 	if (buf3_head) {
 		for (buf3 = buf3_head, len = 0; len < buf3_len; len++) free(buf3[len]);
 		free(buf3_head);
