@@ -20,7 +20,8 @@ int help()
 		"t FILE1 FILE2 [RESULTS] Compare 2 text files\n"
 		"h                       Start network host\n"
 		"c                       Start network client\n"
-		"s FILE                  Test SHA3-512 hashing\n" C_STD);
+		"s FILE                  Test SHA3-512 hashing\n"
+		"S FILE                  Test SHAKE-128 hashing\n" C_STD);
 }
 
 int main(int argc, char **argv)
@@ -29,7 +30,7 @@ int main(int argc, char **argv)
 	DIR     *tmp;
 	FILE    *out;
 	int      i;
-	uint8_t *pbuf;
+	uint8_t *u8_ptr;
 
 	if (argc < 2) return help();
 	switch (argv[1][0]) {
@@ -51,7 +52,7 @@ int main(int argc, char **argv)
 	case 't':
 		if (argc != 4 && argc != 5) return help();
 		if (argc == 4 || !(out = fopen(argv[4], "w"))) out = stdout;
-		diff_txt2(argv[2], argv[3], out);
+		diff_txt(argv[2], argv[3], out);
 		if (out != stdout) fclose(out);
 		break;
 	case 'h':
@@ -62,13 +63,19 @@ int main(int argc, char **argv)
 		break;
 	case 's':
 		if (argc != 3) return help();
-		if ((pbuf = sha512(argv[2]))) {
+		if ((u8_ptr = sha512(argv[2]))) {
+			puts("SHA3-512 hash:");
 			for (i = 0; i < EVP_MAX_MD_SIZE; i++)
-				printf("%02X", pbuf[i]);
+				printf("%02X", u8_ptr[i]);
 			puts("");
-			free(pbuf);
+			free(u8_ptr);
 		}
 		break;
+/*	case 'S':
+		if (argc != 3) return help();
+		if ((u64 = shake128(argv[2])))
+			printf("SHAKE-128 hash:\n%016lX\n", u64);
+		break;*/
 	default:
 		return help();
 		break;
