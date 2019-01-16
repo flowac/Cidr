@@ -15,18 +15,13 @@
 #include <sys/stat.h>
 #include "define.h"
 
-const  uint32_t MAX_U24 = 0x00FFFFFF;
 const  uint32_t MAX_U28 = 0x0FFFFFFF;
 const  uint32_t MAX_U31 = 0x7FFFFFFF;
 const  uint32_t NOT_U31 = 0x80000000;
 const  uint32_t MAX_U32 = 0xFFFFFFFF;
-const  uint64_t MAX_U56 = 0x00FFFFFFFFFFFFFFULL;
-const  uint64_t MAX_U64 = 0xFFFFFFFFFFFFFFFFULL;
-static uint32_t table[BUF_256];
-extern uint32_t Cvt_r(const char *in_path, const char *out_path);
 
 typedef struct u32_u32 {
-	uint32_t  key; //Hash value of string
+	uint64_t  key; //Hash value of string
 	uint32_t  len;
 	uint32_t *data;//Line numbers
 } u32_u32;
@@ -47,8 +42,16 @@ uint32_t fsize(FILE *fp)
 	return size;
 }
 
+char *is_zip(const char *name)
+{
+	char *tmp1 = strstr(name, ".Z");
+	char *tmp2 = strstr(name, ".z");
+	if (tmp1 < tmp2) tmp1 = tmp2;
+	return tmp1 == name + strlen(name) - 2 ? tmp1 : 0;
+}
+
 //Binary Heap Search
-uint32_t u32_find(const u32_u32 *arr, const uint32_t len, const uint32_t val)
+uint32_t u32_find(const u32_u32 *arr, const uint32_t len, const uint64_t val)
 {
 	uint32_t left = 0, mid = MAX_U32, right = len - 1;
 	if (!arr || len == 0) goto RETURN;
@@ -75,7 +78,7 @@ u32_u32 *u32_free(u32_u32 **ptr, uint32_t len)
 RETURN:	return 0;
 }
 
-u32_u32 *u32_insert(u32_u32 *arr, uint32_t *len, const uint32_t val, const uint32_t pos)
+u32_u32 *u32_insert(u32_u32 *arr, uint32_t *len, const uint64_t val, const uint32_t pos)
 {
 	uint32_t flag;
 	u32_u32 *arr2 = arr;
@@ -104,7 +107,7 @@ u32_u32 *u32_insert(u32_u32 *arr, uint32_t *len, const uint32_t val, const uint3
 RETURN:	return arr2;
 }
 
-uint32_t u32_pop(u32_u32 *arr, uint32_t len, uint32_t val)
+uint32_t u32_pop(u32_u32 *arr, uint32_t len, uint64_t val)
 {
 	uint32_t ret = MAX_U32, pos = u32_find(arr, len, val);
 	if (pos >= MAX_U28) goto RETURN;
@@ -177,14 +180,6 @@ char *str_pop(u32_str *arr, uint32_t len, uint32_t val)
 RETURN:	return str;
 }
 
-char *is_zip(const char *name)
-{
-	char *tmp1 = strstr(name, ".Z");
-	char *tmp2 = strstr(name, ".z");
-	if (tmp1 < tmp2) tmp1 = tmp2;
-	return tmp1 == name + strlen(name) - 2 ? tmp1 : 0;
-}
-
 uint8_t *sha512(const char *name)
 {
 	EVP_MD_CTX *md_ctx = 0;
@@ -221,73 +216,58 @@ RETURN:	if (md_ctx) EVP_MD_CTX_free(md_ctx);
 	return md_val2;
 }
 
-uint32_t crc32_table(uint32_t x)
-{
-	for (uint32_t i = 0; i < 8; i++) x = (x & 1 ? 0 : 0xEDB88320UL) ^ x >> 1;
-	return x ^ 0xFF000000UL;
-}
-
-uint32_t crc32(char *data, uint32_t size)
-{
-	uint32_t crc = 0, i;
-	if (!data || size == 0) goto RETURN;
-	if (!*table) for (i = 0; i < BUF_256; i++) table[i] = crc32_table(i);
-	for (i = 0; i < size; i++) crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >> 8);
-RETURN: return crc;
-}
-
-void diff_txt(const char *left, const char *right, FILE *out)
+void diff_txt(const char *left_file, const char *right_file, FILE *out)
 {
 	char buf[BUF_1K] = {0}, *tmp;
-	FILE *left4 = 0, *right4 = 0;
-	uint32_t  flag, i, j, left6 = 0;
-	uint32_t *right5 = 0, right6 = 0, right8 = 0, right10 = 0;
-	u32_u32  *right7 = 0;
-	u32_str  *right9 = 0;
+	FILE *left = 0, *right = 0;
+	u32_u32  *chksum = 0;
+	u32_str  *tmpstr = 0;
+	uint32_t  flag, i, left_len = 0, *lookup = 0;
+	uint32_t  chksum_len = 0, right_len = 0, tmpstr_len = 0;
+	uint64_t  sum;
 
-	if (!(left4  = fopen(left,  "r"))) goto RETURN;
-	if (!(right4 = fopen(right, "r"))) goto RETURN;
+	if (!(left  = fopen(left_file,  "r"))) goto RETURN;
+	if (!(right = fopen(right_file, "r"))) goto RETURN;
 	//Get checksum of each line
-	for (; fgets((char *)buf, BUF_1K, right4); *buf = 0, right6++) {
-		if (!(right5 = realloc(right5, sizeof(uint32_t) * (right6 + 1)))) goto RETURN;
-		right5[right6] = MAX_U31;
-		flag = crc32(buf, strlen(buf));
-//		shake128(buf, strlen(buf));
-		if (!(right7 = u32_insert(right7, &right8, flag, right6))) goto RETURN;
+	for (; fgets(buf, BUF_1K, right); *buf = 0, right_len++) {
+		if (!(lookup = realloc(lookup, sizeof(uint32_t) * (right_len + 1)))) goto RETURN;
+		lookup[right_len] = MAX_U31;
+		sum = shake128(buf, strlen(buf));
+		if (!(chksum = u32_insert(chksum, &chksum_len, sum, right_len))) goto RETURN;
 	}
-	for (; fgets((char *)buf, BUF_1K, left4); *buf = 0, left6++) {
-		if (left6 > right6) if (!(right5 = realloc(right5, sizeof(uint32_t) * (left6 + 1)))) goto RETURN;
-		flag = crc32(buf, strlen(buf));
-//		shake128(buf, strlen(buf));
-		if (MAX_U32 != (flag = u32_pop(right7, right8, flag))) {
-			right5[flag] &= NOT_U31;
-			right5[flag] |= left6 + 1;
-			right5[left6] &= MAX_U31;
-		} else  right5[left6] |= NOT_U31;
+	for (; fgets(buf, BUF_1K, left); *buf = 0, left_len++) {
+		if (left_len > right_len) if (!(lookup = realloc(lookup, sizeof(uint32_t) * (left_len + 1)))) goto RETURN;
+		sum = shake128(buf, strlen(buf));
+		if (MAX_U32 != (flag = u32_pop(chksum, chksum_len, sum))) {
+			lookup[flag]     &= NOT_U31;
+			lookup[flag]     |= left_len + 1;
+			lookup[left_len] &= MAX_U31;
+		} else  lookup[left_len] |= NOT_U31;
 	}
-	fseek( left4, 0L, SEEK_SET);
-	fseek(right4, 0L, SEEK_SET);
-	for (i = j = flag = 0; fgets(buf, BUF_1K, right4) && i < right6; i++) {
-		if ((right5[i] & MAX_U31) < MAX_U24) {
-			j = right5[i] & MAX_U31;
+	fseek( left, 0L, SEEK_SET);
+	fseek(right, 0L, SEEK_SET);
+	//Process and print output
+	for (i = flag = 0; fgets(buf, BUF_1K, right) && i < right_len; i++) {
+		if ((lookup[i] & MAX_U31) < MAX_U31) {
+			flag = lookup[i] & MAX_U31;
 			continue;
 		}
-		if (!(right9 = str_insert(right9, &right10, buf, j))) goto RETURN;
+		if (!(tmpstr = str_insert(tmpstr, &tmpstr_len, buf, flag))) goto RETURN;
 	}
-	for (i = 0; fgets(buf, BUF_1K, left4) && i < left6; i++) {
-		if ((right5[i] >> 31) & 1) fprintf(out, C_RED "--%5d %s" C_STD, i + 1, buf);
+	for (i = 0; fgets(buf, BUF_1K, left) && i < left_len; i++) {
+		if ((lookup[i] >> 31) & 1) fprintf(out, C_RED "--%5d %s" C_STD, i + 1, buf);
 //		else           fprintf(out, "  %5d %s", i + 1, buf);
-		while ((tmp = str_pop(right9, right10, i))) {
+		while ((tmp = str_pop(tmpstr, tmpstr_len, i))) {
 			fprintf(out, C_GRN "++%5d %s" C_STD, i + 1, tmp);
 			free(tmp);
 		}
 	}
-	printf("Line count: left = %d, right = %d\n", left6, right6);
-RETURN:	if (left4)  fclose(left4);
-	if (right4) fclose(right4);
-	if (right5) free(right5);
-	if (right7) u32_free(&right7, right8);
-	if (right9) str_free(&right9, right10);
+	printf("Line count: left = %d, right = %d\n", left_len, right_len);
+RETURN:	if (left)   fclose(left);
+	if (right)  fclose(right);
+	if (lookup) free(lookup);
+	if (chksum) u32_free(&chksum, chksum_len);
+	if (tmpstr) str_free(&tmpstr, tmpstr_len);
 }
 
 char diff_bin(const char *left, const char *right) {
@@ -295,7 +275,6 @@ char diff_bin(const char *left, const char *right) {
 	char diff = -1;
 	if (!left_hash || !right_hash) goto RETURN;
 	diff = memcmp(left_hash, right_hash, EVP_MAX_MD_SIZE) == 0 ? 0 : 1;
-
 RETURN:	if (left_hash)  free(left_hash);
 	if (right_hash) free(right_hash);
 	return diff;
