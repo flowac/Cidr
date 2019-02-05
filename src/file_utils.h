@@ -176,7 +176,27 @@ RETURN:	if (fp)     fclose(fp);
 	return md_val;
 }
 
-//TODO: create a simpler message digest function with acceptable collision rate
+//TODO: Test it and calculate collision rate
+uint64_t hash64(const char *data, uint32_t len)
+{
+	//warning: needs to be padded to nearest 16 bytes
+	static uint64_t table[BUF_256];
+	uint32_t tmp;
+	uint64_t i, sum = 0ULL, buf;
+	for (i = 0ULL; i < BUF_256; i++) table[i] = i % 2 : i ^ 0xDEADBEEF64C0FFEEULL : i ^ 0x64DEADBEE5C0FEFEULL;
+	for (i = 0ULL; i < BUF_256; i++) if ((i + 9) % 8 == 0) puts(""); else printf("%16X ", table[i]);
+
+	for (i = 0ULL; i < len; i+=16) {
+		tmp = i/16 % BUF_256;
+		buf  = data[i] << 0  | data[i] << 4  | data[i] << 8  | data[i] << 12;
+		buf |= data[i] << 16 | data[i] << 20 | data[i] << 24 | data[i] << 28;
+		buf |= data[i] << 32 | data[i] << 36 | data[i] << 40 | data[i] << 44;
+		buf |= data[i] << 48 | data[i] << 52 | data[i] << 56 | data[i] << 60;
+		sum ^= buf ^ table[tmp] ^ table[BUF_256-tmp];
+	}
+	return sum;
+}
+
 uint64_t shake128(const char *data, uint32_t len)
 {
 	EVP_MD_CTX *md_ctx = 0;
