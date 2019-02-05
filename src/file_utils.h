@@ -179,21 +179,30 @@ RETURN:	if (fp)     fclose(fp);
 //TODO: Test it and calculate collision rate
 uint64_t hash64(const char *data, uint32_t len)
 {
-	//warning: needs to be padded to nearest 16 bytes
+	//warning: needs to be padded to nearest 9 bytes
 	static uint64_t table[BUF_256];
 	uint32_t tmp;
 	uint64_t i, sum = 0ULL, buf;
-	for (i = 0ULL; i < BUF_256; i++) table[i] = i % 2 : i ^ 0xDEADBEEF64C0FFEEULL : i ^ 0x64DEADBEE5C0FEFEULL;
-	for (i = 0ULL; i < BUF_256; i++) if ((i + 9) % 8 == 0) puts(""); else printf("%16X ", table[i]);
+	for (i = 0ULL; i < BUF_256; i++) table[i] = i % 2 ? i ^ 0xDEADBEEF64C0FFEEULL : i ^ 0x64DEADBEE5C0FEFEULL;
+//	for (i = 0ULL; i < BUF_256; i++) if ((i + 9) % 8 == 0) puts(""); else printf("%16lX ", table[i]);
 
-	for (i = 0ULL; i < len; i+=16) {
-		tmp = i/16 % BUF_256;
-		buf  = data[i] << 0  | data[i] << 4  | data[i] << 8  | data[i] << 12;
-		buf |= data[i] << 16 | data[i] << 20 | data[i] << 24 | data[i] << 28;
-		buf |= data[i] << 32 | data[i] << 36 | data[i] << 40 | data[i] << 44;
-		buf |= data[i] << 48 | data[i] << 52 | data[i] << 56 | data[i] << 60;
-		sum ^= buf ^ table[tmp] ^ table[BUF_256-tmp];
+	for (i = 0ULL; i < len; i+=9) {
+		tmp = i/9 % BUF_256;
+		buf  = (uint64_t)data[i];
+		buf |= (uint64_t)data[i+1] << 7;
+		buf |= (uint64_t)data[i+2] << 14;
+		buf |= (uint64_t)data[i+3] << 21;
+		buf |= (uint64_t)data[i+4] << 28;
+		buf |= (uint64_t)data[i+5] << 35;
+		buf |= (uint64_t)data[i+6] << 42;
+		buf |= (uint64_t)data[i+7] << 49;
+		buf |= (uint64_t)data[i+8] << 56;
+		buf |= 1ULL << 63;
+		sum <<= 5;
+		sum ^= table[tmp];
+		sum ^= buf ^ table[BUF_256-tmp];
 	}
+printf("%08lX  %s\n", sum, data);
 	return sum;
 }
 
@@ -230,19 +239,21 @@ void diff_txt(const char *left_file, const char *right_file, FILE *out)
 	if (!(left  = fopen(left_file,  "r"))) goto RETURN;
 	if (!(right = fopen(right_file, "r"))) goto RETURN;
 	//Get checksum of each line
-	for (; fgets(buf, BUF_1K, right); *buf = 0, right_len++) {
+	for (memset(buf, 0, BUF_1K); fgets(buf, BUF_1K, right); memset(buf, 0, BUF_1K), right_len++) {
 		if (!(lookup = realloc(lookup, sizeof(uint32_t) * (right_len + 1)))) goto RETURN;
 		if (!(offset = realloc(offset, sizeof(uint32_t) * (right_len + 2)))) goto RETURN;
 		lookup[right_len] = MAX_U31;
 		offset[right_len+1] = ftell(right);
-		sum = shake128(buf, strlen(buf));
+//		sum = shake128(buf, strlen(buf));
+		sum = hash64(buf, strlen(buf));
 		if (!(chksum = u32_insert(chksum, &chksum_len, sum, right_len))) goto RETURN;
 	}
 puts("done right");
 	offset[0] = 0;
-	for (; fgets(buf, BUF_1K, left); *buf = 0, left_len++) {
+	for (; fgets(buf, BUF_1K, left); memset(buf, 0, BUF_1K), left_len++) {
 		if (left_len > right_len) if (!(lookup = realloc(lookup, sizeof(uint32_t) * (left_len + 1)))) goto RETURN;
-		sum = shake128(buf, strlen(buf));
+//		sum = shake128(buf, strlen(buf));
+		sum = hash64(buf, strlen(buf));
 		if (MAX_U32 != (flag = u32_pop(chksum, chksum_len, sum))) {
 			lookup[flag]     &= NOT_U31;
 			lookup[flag]     |= left_len + 1;
