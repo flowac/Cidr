@@ -26,11 +26,6 @@ typedef struct u32_u32 {
 	uint32_t *data;//Line numbers
 } u32_u32;
 
-typedef struct u32_pair {
-	uint32_t left;
-	uint32_t right;
-} u32_pair;
-
 uint32_t fsize(FILE *fp)
 {
 	uint32_t size;
@@ -71,8 +66,9 @@ RETURN:	return mid;
 
 u32_u32 *u32_free(u32_u32 **ptr, uint32_t len)
 {
+	uint32_t i;
 	if (!*ptr) goto RETURN;
-	for (uint32_t i = 0; i < len; i++) free((*ptr)[i].data);
+	for (i = 0; i < len; i++) free((*ptr)[i].data);
 	free(*ptr);
 RETURN:	return 0;
 }
@@ -115,48 +111,21 @@ uint32_t u32_pop(u32_u32 *arr, uint32_t len, uint64_t val)
 RETURN:	return ret;
 }
 
-uint32_t u32p_find(const u32_pair *arr, const uint32_t len, const uint32_t val)
+//Dequeue: improves overall performance by 3% compared to u32_pop
+uint32_t u32_dq(u32_u32 *arr, uint32_t len, uint32_t *pos, uint64_t val)
 {
-	uint32_t left = 0, mid = MAX_U32, right = len - 1;
-	if (!arr || len == 0) goto RETURN;
-	while (left <= right) {
-		mid = (left + right) / 2;
-		if (val < arr[mid].left)      right = mid > 0 ? mid - 1 : 0;
-		else /*if (val > arr[mid].left)*/ left  = ++mid;
+	uint32_t ret = MAX_U32;
+	if (arr[*pos].key != val || arr[*pos].len == 0) {
+		if (*pos + 1 >= len || arr[*pos+1].key != val) goto RETURN;
+		else *pos += 1;
 	}
-RETURN:	return mid;
-}
-
-u32_pair *u32p_insert(u32_pair *arr, uint32_t *len, const uint32_t left, const uint32_t right)
-{
-	u32_pair *arr2 = arr;
-	uint32_t flag = u32p_find(arr2, *len, left);
-	if (flag == MAX_U32) flag = 0;
-	if (!(arr2 = realloc(arr2, sizeof(u32_pair) * (*len + 1)))) {
-		free(arr2);
-		arr2 = 0;
-		goto RETURN;
-	}
-	if (flag < *len) memmove(arr2 + flag + 1, arr2 + flag, sizeof(u32_pair) * (*len - flag));
-	arr2[flag].left = left;
-	arr2[flag].right = right;
-	*len += 1;
-RETURN:	return arr2;
-}
-
-uint32_t u32p_pop(u32_pair *arr, uint32_t *len, uint32_t left)
-{
-	uint32_t right = MAX_U32;
-	if (*len == 0)           goto RETURN;
-	if (arr[0].left != left) goto RETURN;
-	right = arr[0].right;
-	*len -= 1;
-	if (*len > 0) memmove(arr, arr + 1, sizeof(u32_pair) * *len);
-RETURN:	return right;
+	ret = arr[*pos].data[0];
+	if (--arr[*pos].len > 0) memmove(arr[*pos].data, arr[*pos].data + 1, sizeof(uint32_t) * arr[*pos].len);
+RETURN:	return ret;
 }
 
 uint8_t *sha512(const char *name)
-{
+{/*
 	EVP_MD_CTX *md_ctx = 0;
 	FILE *fp = fopen(name, "rb");
 	uint32_t md_len, data_len = fsize(fp);
@@ -173,21 +142,19 @@ uint8_t *sha512(const char *name)
 RETURN:	if (fp)     fclose(fp);
 	if (data)   free(data);
 	if (md_ctx) EVP_MD_CTX_free(md_ctx);
-	return md_val;
+	return md_val;*/return 0;
 }
 
-//TODO: Test it and calculate collision rate
+//TODO: Calculate collision rate
 uint64_t hash64(const char *data, uint32_t len)
 {
-	//warning: needs to be padded to nearest 9 bytes
-	static uint64_t table[BUF_256];
-	uint32_t tmp;
-	uint64_t i, sum = 0ULL, buf;
-	for (i = 0ULL; i < BUF_256; i++) table[i] = i % 2 ? i ^ 0xDEADBEEF64C0FFEEULL : i ^ 0x64DEADBEE5C0FEFEULL;
-//	for (i = 0ULL; i < BUF_256; i++) if ((i + 9) % 8 == 0) puts(""); else printf("%16lX ", table[i]);
+	static uint64_t table[BUF_256] = {0};
+	uint32_t k;
+	uint64_t i, j, sum = 0ULL, buf;
+	if (!table[0]) for (i = 0ULL; i < BUF_256; table[i++] = j ^ 0xBEE50000C0FEFE00ULL)
+		for (k = 0, j = i; k < 11; k++) j = (j & 1 ? 0ULL : 0x42F0E1EBA9EA3693ULL) ^ j >> 1;
 
 	for (i = 0ULL; i < len; i+=9) {
-		tmp = i/9 % BUF_256;
 		buf  = (uint64_t)data[i];
 		buf |= (uint64_t)data[i+1] << 7;
 		buf |= (uint64_t)data[i+2] << 14;
@@ -198,41 +165,26 @@ uint64_t hash64(const char *data, uint32_t len)
 		buf |= (uint64_t)data[i+7] << 49;
 		buf |= (uint64_t)data[i+8] << 56;
 		buf |= 1ULL << 63;
+		k = i / 9 % BUF_256;
 		sum <<= 5;
-		sum ^= table[tmp];
-		sum ^= buf ^ table[BUF_256-tmp];
+		sum ^= table[k];
+		sum ^= buf ^ table[BUF_256-k];
 	}
-printf("%08lX  %s\n", sum, data);
+//printf("%08lX  %s\n", sum, data);
 	return sum;
-}
-
-uint64_t shake128(const char *data, uint32_t len)
-{
-	EVP_MD_CTX *md_ctx = 0;
-	uint64_t md_val2 = 0ULL;
-	uint8_t md_val[8], i;
-
-	if (!(md_ctx = EVP_MD_CTX_new())) goto RETURN;
-	EVP_DigestInit_ex(md_ctx, EVP_shake128(), NULL);
-	EVP_DigestUpdate(md_ctx, data, len);
-	EVP_DigestFinalXOF(md_ctx, md_val, 8);
-	for (i = 0; i < 8; i++) md_val2 |= (md_val[i] & 0xFFULL) << ((7 - i) * 8);
-RETURN:	if (md_ctx) EVP_MD_CTX_free(md_ctx);
-	return md_val2;
 }
 
 void diff_txt(const char *left_file, const char *right_file, FILE *out)
 {
 	char buf[BUF_1K] = {0};
 	FILE *left = 0, *right = 0;
-	u32_u32 *chksum = 0;
 	//The position where lines needed to be inserted on the left side is recorded in *add
-	u32_pair *add = 0;
+	u32_u32 *add = 0, *chksum = 0;
 	//Line number offset for the right side is stored in *offset
 	int32_t *offset = 0;
 	//Lookup table stores whether line on left side is removed at most significant bit
 	//Then it stores the line number where right side is added (WRT left) at lower 31 bits
-	uint32_t flag, i, left_len = 0, *lookup = 0;
+	uint32_t flag, i, j, left_len = 0, *lookup = 0;
 	uint32_t chksum_len = 0, right_len = 0, add_len = 0;
 	uint64_t sum;
 
@@ -244,15 +196,12 @@ void diff_txt(const char *left_file, const char *right_file, FILE *out)
 		if (!(offset = realloc(offset, sizeof(uint32_t) * (right_len + 2)))) goto RETURN;
 		lookup[right_len] = MAX_U31;
 		offset[right_len+1] = ftell(right);
-//		sum = shake128(buf, strlen(buf));
 		sum = hash64(buf, strlen(buf));
 		if (!(chksum = u32_insert(chksum, &chksum_len, sum, right_len))) goto RETURN;
 	}
-puts("done right");
 	offset[0] = 0;
 	for (; fgets(buf, BUF_1K, left); memset(buf, 0, BUF_1K), left_len++) {
 		if (left_len > right_len) if (!(lookup = realloc(lookup, sizeof(uint32_t) * (left_len + 1)))) goto RETURN;
-//		sum = shake128(buf, strlen(buf));
 		sum = hash64(buf, strlen(buf));
 		if (MAX_U32 != (flag = u32_pop(chksum, chksum_len, sum))) {
 			lookup[flag]     &= NOT_U31;
@@ -260,21 +209,19 @@ puts("done right");
 			lookup[left_len] &= MAX_U31;
 		} else  lookup[left_len] |= NOT_U31;
 	}
-puts("done left");
-	fseek( left, 0L, SEEK_SET);
+	fseek(left, 0L, SEEK_SET);
 	//Process and print output
 	for (i = flag = 0; i < right_len; i++) {
 		if ((lookup[i] & MAX_U31) < MAX_U31) {
 			flag = lookup[i] & MAX_U31;
 			continue;
 		}
-		if (!(add = u32p_insert(add, &add_len, flag, i))) goto RETURN;
+		if (!(add = u32_insert(add, &add_len, (uint64_t)flag, i))) goto RETURN;
 	}
-puts("done pre process");
-	for (i = 0; fgets(buf, BUF_1K, left) && i < left_len; i++) {
+	for (i = j = 0; fgets(buf, BUF_1K, left) && i < left_len; i++) {
 		if ((lookup[i] >> 31) & 1) fprintf(out, C_RED "--%5d %s" C_STD, i + 1, buf);
 //		else           fprintf(out, "  %5d %s", i + 1, buf);
-		while (MAX_U32 != (flag = u32p_pop(add, &add_len, i))) {
+		while (MAX_U32 != (flag = u32_dq(add, add_len, &j, (uint64_t)i))) {
 			fseek(right, offset[flag], SEEK_SET);
 			fgets(buf, BUF_1K, right);
 			fprintf(out, C_GRN "++%5d %s" C_STD, i + 1, buf);
@@ -283,9 +230,9 @@ puts("done pre process");
 	printf("Line count: left = %d, right = %d\n", left_len, right_len);
 RETURN:	if (left)   fclose(left);
 	if (right)  fclose(right);
-	if (add)    free(add);
 	if (lookup) free(lookup);
 	if (offset) free(offset);
+	if (add)    u32_free(&add, add_len);
 	if (chksum) u32_free(&chksum, chksum_len);
 }
 

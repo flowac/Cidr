@@ -62,14 +62,14 @@ int main(int argc, char **argv)
 		init_sock_client();
 		break;
 	case 's':
-		if (argc != 3) return help();
+/*		if (argc != 3) return help();
 		if ((u8_ptr = sha512(argv[2]))) {
 			puts("SHA3-512 hash:");
 			for (i = 0; i < EVP_MAX_MD_SIZE; i++)
 				printf("%02X", u8_ptr[i]);
 			puts("");
 			free(u8_ptr);
-		}
+		}*/
 		break;
 /*	case 'S':
 		if (argc != 3) return help();
