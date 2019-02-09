@@ -20,32 +20,25 @@ const  uint32_t MAX_U31 = 0x7FFFFFFF;
 const  uint32_t NOT_U31 = 0x80000000;
 const  uint32_t MAX_U32 = 0xFFFFFFFF;
 
-typedef struct u32_u32 {
-	uint64_t  key; //Hash value of string
+//Psuedo hash map access time: worse case O(log(n)), best case O(1)
+typedef struct u32_hash {
+	uint64_t  key;//TODO: maybe change to 32 bits
 	uint32_t  len;
-	uint32_t *data;//Line numbers
-} u32_u32;
+	uint32_t *data;
+} u32_hash;
 
 uint32_t fsize(FILE *fp)
 {
-	uint32_t size;
-	if (!fp) return 0;
+	uint32_t size = 0;
+	if (!fp) goto RETURN;
 	fseek(fp, 0L, SEEK_END);
 	size = ftell(fp);
 	fseek(fp, 0L, SEEK_SET);
-	return size;
-}
-
-char *is_zip(const char *name)
-{
-	char *tmp1 = strstr(name, ".Z");
-	char *tmp2 = strstr(name, ".z");
-	if (tmp1 < tmp2) tmp1 = tmp2;
-	return tmp1 == name + strlen(name) - 2 ? tmp1 : 0;
+RETURN:	return size;
 }
 
 //Binary Heap Search
-uint32_t u32_find(const u32_u32 *arr, const uint32_t len, const uint64_t val)
+uint32_t u32_find(const u32_hash *arr, const uint32_t len, const uint64_t val)
 {
 	uint32_t left = 0, mid = MAX_U32, right = len - 1;
 	if (!arr || len == 0) goto RETURN;
@@ -64,29 +57,29 @@ FAILED:	mid ^= MAX_U32;
 RETURN:	return mid;
 }
 
-u32_u32 *u32_free(u32_u32 **ptr, uint32_t len)
+void u32_free(u32_hash **ptr, uint32_t len)
 {
 	uint32_t i;
-	if (!*ptr) goto RETURN;
+	if (!*ptr) return;
 	for (i = 0; i < len; i++) free((*ptr)[i].data);
 	free(*ptr);
-RETURN:	return 0;
+	*ptr = 0;
 }
 
-u32_u32 *u32_insert(u32_u32 *arr, uint32_t *len, const uint64_t val, const uint32_t pos)
+u32_hash *u32_insert(u32_hash *arr, uint32_t *len, const uint64_t val, const uint32_t pos)
 {
 	uint32_t flag;
-	u32_u32 *arr2 = arr;
+	u32_hash *arr2 = arr;
 
 	if (MAX_U28 < (flag = u32_find(arr2, *len, val))) {
-		if (!(arr2 = realloc(arr2, sizeof(u32_u32) * (*len + 1)))) {
-			arr2 = u32_free(&arr, *len);
+		if (!(arr2 = realloc(arr2, sizeof(u32_hash) * (*len + 1)))) {
+			u32_free(&arr, *len);
 			goto RETURN;
 		}
 		flag ^= MAX_U32;
 		if (flag != *len) {
 			if (arr2[flag].key < val) flag++;
-			memmove(arr2 + flag + 1, arr2 + flag, sizeof(u32_u32) * (*len - flag));
+			memmove(arr2 + flag + 1, arr2 + flag, sizeof(u32_hash) * (*len - flag));
 		}
 		arr2[flag].key  = val;
 		arr2[flag].len  = 0;
@@ -94,7 +87,7 @@ u32_u32 *u32_insert(u32_u32 *arr, uint32_t *len, const uint64_t val, const uint3
 		*len += 1;
 	}
 	if (!(arr2[flag].data = realloc(arr2[flag].data, sizeof(uint32_t) * (arr2[flag].len + 1)))) {
-		arr2 = u32_free(&arr2, *len);
+		u32_free(&arr2, *len);
 		goto RETURN;
 	}
 	arr2[flag].data[arr2[flag].len] = pos;
@@ -102,7 +95,8 @@ u32_u32 *u32_insert(u32_u32 *arr, uint32_t *len, const uint64_t val, const uint3
 RETURN:	return arr2;
 }
 
-uint32_t u32_pop(u32_u32 *arr, uint32_t len, uint64_t val)
+//Pop: out-of-order removal O(log(n))
+uint32_t u32_pop(u32_hash *arr, uint32_t len, uint64_t val)
 {
 	uint32_t ret = MAX_U32, pos = u32_find(arr, len, val);
 	if (pos >= MAX_U28) goto RETURN;
@@ -111,8 +105,8 @@ uint32_t u32_pop(u32_u32 *arr, uint32_t len, uint64_t val)
 RETURN:	return ret;
 }
 
-//Dequeue: improves overall performance by 3% compared to u32_pop
-uint32_t u32_dq(u32_u32 *arr, uint32_t len, uint32_t *pos, uint64_t val)
+//Dequeue: in-order removal O(1)
+uint32_t u32_dq(u32_hash *arr, uint32_t len, uint32_t *pos, uint64_t val)
 {
 	uint32_t ret = MAX_U32;
 	if (arr[*pos].key != val || arr[*pos].len == 0) {
@@ -125,7 +119,7 @@ RETURN:	return ret;
 }
 
 uint8_t *sha512(const char *name)
-{/*
+{
 	EVP_MD_CTX *md_ctx = 0;
 	FILE *fp = fopen(name, "rb");
 	uint32_t md_len, data_len = fsize(fp);
@@ -142,35 +136,23 @@ uint8_t *sha512(const char *name)
 RETURN:	if (fp)     fclose(fp);
 	if (data)   free(data);
 	if (md_ctx) EVP_MD_CTX_free(md_ctx);
-	return md_val;*/return 0;
+	return md_val;
 }
 
-//TODO: Calculate collision rate
+//TODO: Calculate collision rate for data size of 200
 uint64_t hash64(const char *data, uint32_t len)
 {
 	static uint64_t table[BUF_256] = {0};
-	uint32_t k;
-	uint64_t i, j, sum = 0ULL, buf;
-	if (!table[0]) for (i = 0ULL; i < BUF_256; table[i++] = j ^ 0xBEE50000C0FEFE00ULL)
-		for (k = 0, j = i; k < 11; k++) j = (j & 1 ? 0ULL : 0x42F0E1EBA9EA3693ULL) ^ j >> 1;
+	uint32_t i, j, k;
+	uint64_t l, sum = 0ULL, buf;
+	if (!table[0]) for (i = 0; i < BUF_256; table[i++] = l ^ 0xBEE50000C0FEFE00ULL)
+		for (k = 0, l = (uint64_t)i; k < 11; k++)
+			l = (l & 1 ? 0ULL : 0x42F0E1EBA9EA3693ULL) ^ l >> 1;
 
-	for (i = 0ULL; i < len; i+=9) {
-		buf  = (uint64_t)data[i];
-		buf |= (uint64_t)data[i+1] << 7;
-		buf |= (uint64_t)data[i+2] << 14;
-		buf |= (uint64_t)data[i+3] << 21;
-		buf |= (uint64_t)data[i+4] << 28;
-		buf |= (uint64_t)data[i+5] << 35;
-		buf |= (uint64_t)data[i+6] << 42;
-		buf |= (uint64_t)data[i+7] << 49;
-		buf |= (uint64_t)data[i+8] << 56;
-		buf |= 1ULL << 63;
-		k = i / 9 % BUF_256;
-		sum <<= 5;
-		sum ^= table[k];
-		sum ^= buf ^ table[BUF_256-k];
+	for (i = j = 0, k = (len + 7) / 8; i < k; j = ++i % BUF_256) {
+		memcpy(&buf, &(data[i*8]), 8);
+		sum = (sum << 5) ^ (buf ^ table[j]);
 	}
-//printf("%08lX  %s\n", sum, data);
 	return sum;
 }
 
@@ -179,13 +161,13 @@ void diff_txt(const char *left_file, const char *right_file, FILE *out)
 	char buf[BUF_1K] = {0};
 	FILE *left = 0, *right = 0;
 	//The position where lines needed to be inserted on the left side is recorded in *add
-	u32_u32 *add = 0, *chksum = 0;
+	u32_hash *add = 0, *chksum = 0;
 	//Line number offset for the right side is stored in *offset
 	int32_t *offset = 0;
 	//Lookup table stores whether line on left side is removed at most significant bit
 	//Then it stores the line number where right side is added (WRT left) at lower 31 bits
 	uint32_t flag, i, j, left_len = 0, *lookup = 0;
-	uint32_t chksum_len = 0, right_len = 0, add_len = 0;
+	uint32_t chksum_len = 0, right_len = 0, add_len = 0, inserts = 0, removes = 0;
 	uint64_t sum;
 
 	if (!(left  = fopen(left_file,  "r"))) goto RETURN;
@@ -219,15 +201,19 @@ void diff_txt(const char *left_file, const char *right_file, FILE *out)
 		if (!(add = u32_insert(add, &add_len, (uint64_t)flag, i))) goto RETURN;
 	}
 	for (i = j = 0; fgets(buf, BUF_1K, left) && i < left_len; i++) {
-		if ((lookup[i] >> 31) & 1) fprintf(out, C_RED "--%5d %s" C_STD, i + 1, buf);
-//		else           fprintf(out, "  %5d %s", i + 1, buf);
+		if ((lookup[i] >> 31) & 1) {
+			fprintf(out, C_RED "--%5d %s" C_STD, i + 1, buf);
+			removes++;
+		} //else fprintf(out, "  %5d %s", i + 1, buf);
 		while (MAX_U32 != (flag = u32_dq(add, add_len, &j, (uint64_t)i))) {
 			fseek(right, offset[flag], SEEK_SET);
 			fgets(buf, BUF_1K, right);
 			fprintf(out, C_GRN "++%5d %s" C_STD, i + 1, buf);
+			inserts++;
 		}
 	}
-	printf("Line count: left = %d, right = %d\n", left_len, right_len);
+	printf("Left     %7u     Right   %7u\n", left_len, right_len);
+	printf("Removes  %7u     Inserts %7u\n", removes, inserts);
 RETURN:	if (left)   fclose(left);
 	if (right)  fclose(right);
 	if (lookup) free(lookup);
