@@ -24,6 +24,7 @@ const  uint32_t MAX_U32 = 0xFFFFFFFF;
 typedef struct u32_hash {
 	uint64_t  key;//TODO: maybe change to 32 bits
 	uint32_t  len;
+	uint32_t  head;//Head offset of the data array
 	uint32_t *data;
 } u32_hash;
 
@@ -49,7 +50,7 @@ uint32_t u32_find(const u32_hash *arr, const uint32_t len, const uint64_t val)
 			if (mid == 0) goto FAILED;
 			right = mid - 1;
 		} else {
-			if (arr[mid].len > 0) goto RETURN;
+			if (arr[mid].len > arr[mid].head) goto RETURN;
 			goto FAILED;
 		}
 	}
@@ -83,6 +84,7 @@ u32_hash *u32_insert(u32_hash *arr, uint32_t *len, const uint64_t val, const uin
 		}
 		arr2[flag].key  = val;
 		arr2[flag].len  = 0;
+		arr2[flag].head = 0;
 		arr2[flag].data = 0;
 		*len += 1;
 	}
@@ -100,8 +102,7 @@ uint32_t u32_pop(u32_hash *arr, uint32_t len, uint64_t val)
 {
 	uint32_t ret = MAX_U32, pos = u32_find(arr, len, val);
 	if (pos >= MAX_U28) goto RETURN;
-	ret = arr[pos].data[0];
-	if (--arr[pos].len > 0) memmove(arr[pos].data, arr[pos].data + 1, sizeof(uint32_t) * arr[pos].len);
+	ret = arr[pos].data[arr[pos].head++];
 RETURN:	return ret;
 }
 
@@ -109,12 +110,11 @@ RETURN:	return ret;
 uint32_t u32_dq(u32_hash *arr, uint32_t len, uint32_t *pos, uint64_t val)
 {
 	uint32_t ret = MAX_U32;
-	if (arr[*pos].key != val || arr[*pos].len == 0) {
+	if (arr[*pos].key != val || arr[*pos].len == arr[*pos].head) {
 		if (*pos + 1 >= len || arr[*pos+1].key != val) goto RETURN;
 		else *pos += 1;
 	}
-	ret = arr[*pos].data[0];
-	if (--arr[*pos].len > 0) memmove(arr[*pos].data, arr[*pos].data + 1, sizeof(uint32_t) * arr[*pos].len);
+	ret = arr[*pos].data[arr[*pos].head++];
 RETURN:	return ret;
 }
 
@@ -174,8 +174,10 @@ void diff_txt(const char *left_file, const char *right_file, FILE *out)
 	if (!(right = fopen(right_file, "r"))) goto RETURN;
 	//Get checksum of each line
 	for (memset(buf, 0, BUF_1K); fgets(buf, BUF_1K, right); memset(buf, 0, BUF_1K), right_len++) {
-		if (!(lookup = realloc(lookup, sizeof(uint32_t) * (right_len + 1)))) goto RETURN;
-		if (!(offset = realloc(offset, sizeof(uint32_t) * (right_len + 2)))) goto RETURN;
+		if (right_len % 100 == 0) {
+			if (!(lookup = realloc(lookup, sizeof(uint32_t) * (right_len + 100)))) goto RETURN;
+			if (!(offset = realloc(offset, sizeof(uint32_t) * (right_len + 101)))) goto RETURN;
+		}
 		lookup[right_len] = MAX_U31;
 		offset[right_len+1] = ftell(right);
 		sum = hash64(buf, strlen(buf));
@@ -183,7 +185,8 @@ void diff_txt(const char *left_file, const char *right_file, FILE *out)
 	}
 	offset[0] = 0;
 	for (; fgets(buf, BUF_1K, left); memset(buf, 0, BUF_1K), left_len++) {
-		if (left_len > right_len) if (!(lookup = realloc(lookup, sizeof(uint32_t) * (left_len + 1)))) goto RETURN;
+		if (left_len > right_len && left_len % 100 == 0)
+			if (!(lookup = realloc(lookup, sizeof(uint32_t) * (left_len + 100)))) goto RETURN;
 		sum = hash64(buf, strlen(buf));
 		if (MAX_U32 != (flag = u32_pop(chksum, chksum_len, sum))) {
 			lookup[flag]     &= NOT_U31;
